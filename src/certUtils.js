@@ -32,7 +32,7 @@ function getRootCA() {
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
 
     const attrs = [
-        { name: 'commonName', value: 'D-TECH Proxy CA' },
+        { name: 'commonName', value: 'D-TECH Root CA' },
         { name: 'countryName', value: 'ZA' },
         { shortName: 'ST', value: 'GP' },
         { name: 'organizationName', value: 'D-TECH Dynamic Tech' },
