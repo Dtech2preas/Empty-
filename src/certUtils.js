@@ -2,83 +2,116 @@ const forge = require('node-forge');
 const fs = require('fs');
 const path = require('path');
 
-const pki = forge.pki;
-const certDir = path.join(__dirname, '../certs');
+const certsDir = path.join(__dirname, '../certs');
+const caKeyPath = path.join(certsDir, 'rootCA.key');
+const caCertPath = path.join(certsDir, 'rootCA.pem');
 
-if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
-
-const CA_KEY_PATH = path.join(certDir, 'rootCA.key');
-const CA_CERT_PATH = path.join(certDir, 'rootCA.pem');
-
-function getRootCA() {
-    if (fs.existsSync(CA_KEY_PATH) && fs.existsSync(CA_CERT_PATH)) {
-        console.log('>> Loading existing D-TECH Root CA...');
-        const certPem = fs.readFileSync(CA_CERT_PATH, 'utf8');
-        const keyPem = fs.readFileSync(CA_KEY_PATH, 'utf8');
-        return {
-            cert: pki.certificateFromPem(certPem),
-            key: pki.privateKeyFromPem(keyPem)
-        };
-    }
-
-    console.log('>> Generating NEW D-TECH Root CA...');
-    const keys = pki.rsa.generateKeyPair(2048);
-    const cert = pki.createCertificate();
-
-    cert.publicKey = keys.publicKey;
-    cert.serialNumber = '01';
-    cert.validity.notBefore = new Date();
-    cert.validity.notAfter = new Date();
-    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
-
-    const attrs = [
-        { name: 'commonName', value: 'D-TECH Root CA' },
-        { name: 'countryName', value: 'ZA' },
-        { shortName: 'ST', value: 'GP' },
-        { name: 'organizationName', value: 'D-TECH Dynamic Tech' },
-        { shortName: 'OU', value: 'Security Research' }
-    ];
-
-    cert.setSubject(attrs);
-    cert.setIssuer(attrs);
-    cert.setExtensions([{ name: 'basicConstraints', cA: true }]);
-
-    cert.sign(keys.privateKey, forge.md.sha256.create());
-
-    fs.writeFileSync(CA_KEY_PATH, pki.privateKeyToPem(keys.privateKey));
-    fs.writeFileSync(CA_CERT_PATH, pki.certificateToPem(cert));
-
-    return { cert, key: keys.privateKey };
+// Ensure certs directory exists
+if (!fs.existsSync(certsDir)) {
+    fs.mkdirSync(certsDir, { recursive: true });
 }
 
-function generateFakeCert(domain) {
-    const ca = getRootCA();
-    const keys = pki.rsa.generateKeyPair(2048);
-    const cert = pki.createCertificate();
+let caKey;
+let caCert;
+
+function initCA() {
+    if (fs.existsSync(caKeyPath) && fs.existsSync(caCertPath)) {
+        console.log('Loading existing D-TECH Root CA...');
+        const keyPem = fs.readFileSync(caKeyPath, 'utf8');
+        const certPem = fs.readFileSync(caCertPath, 'utf8');
+        caKey = forge.pki.privateKeyFromPem(keyPem);
+        caCert = forge.pki.certificateFromPem(certPem);
+    } else {
+        console.log('Generating new D-TECH Root CA...');
+        const keys = forge.pki.rsa.generateKeyPair(2048);
+        const cert = forge.pki.createCertificate();
+
+        cert.publicKey = keys.publicKey;
+        cert.serialNumber = '01';
+        cert.validity.notBefore = new Date();
+        cert.validity.notAfter = new Date();
+        cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
+
+        const attrs = [{
+            name: 'commonName',
+            value: 'D-TECH Root CA'
+        }, {
+            name: 'organizationName',
+            value: 'D-TECH'
+        }];
+
+        cert.setSubject(attrs);
+        cert.setIssuer(attrs);
+        cert.setExtensions([{
+            name: 'basicConstraints',
+            cA: true
+        }]);
+
+        // Self-sign
+        cert.sign(keys.privateKey, forge.md.sha256.create());
+
+        caKey = keys.privateKey;
+        caCert = cert;
+
+        fs.writeFileSync(caKeyPath, forge.pki.privateKeyToPem(caKey));
+        fs.writeFileSync(caCertPath, forge.pki.certificateToPem(caCert));
+        console.log('D-TECH Root CA generated and saved.');
+    }
+}
+
+// Initialize on load
+initCA();
+
+function generateFakeCert(hostname) {
+    const keys = forge.pki.rsa.generateKeyPair(2048);
+    const cert = forge.pki.createCertificate();
 
     cert.publicKey = keys.publicKey;
-    cert.serialNumber = new Date().getTime() + '';
+    cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
     cert.validity.notBefore = new Date();
     cert.validity.notAfter = new Date();
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
 
-    const attrs = [{ name: 'commonName', value: domain }];
+    const attrs = [{
+        name: 'commonName',
+        value: hostname
+    }, {
+        name: 'organizationName',
+        value: 'D-TECH API-Fier Proxy'
+    }];
+
     cert.setSubject(attrs);
-    cert.setIssuer(ca.cert.subject.attributes);
+    // Issuer is the Root CA
+    cert.setIssuer(caCert.subject.attributes);
 
-    cert.setExtensions([
-        { name: 'basicConstraints', cA: false },
-        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
-        { name: 'extKeyUsage', serverAuth: true },
-        { name: 'subjectAltName', altNames: [{ type: 2, value: domain }] }
-    ]);
+    cert.setExtensions([{
+        name: 'basicConstraints',
+        cA: false
+    }, {
+        name: 'keyUsage',
+        keyCertSign: false,
+        digitalSignature: true,
+        nonRepudiation: true,
+        keyEncipherment: true,
+        dataEncipherment: true
+    }, {
+        name: 'subjectAltName',
+        altNames: [{
+            type: 2, // DNS
+            value: hostname
+        }]
+    }]);
 
-    cert.sign(ca.key, forge.md.sha256.create());
+    // Sign with Root CA
+    cert.sign(caKey, forge.md.sha256.create());
 
     return {
-        key: pki.privateKeyToPem(keys.privateKey),
-        cert: pki.certificateToPem(cert)
+        key: forge.pki.privateKeyToPem(keys.privateKey),
+        cert: forge.pki.certificateToPem(cert)
     };
 }
 
-module.exports = { getRootCA, generateFakeCert, CA_CERT_PATH };
+module.exports = {
+    generateFakeCert,
+    caCertPath // Export path if needed
+};

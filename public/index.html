@@ -2,64 +2,146 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>D-TECH API-Fier</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D-TECH API-Fier Dashboard</title>
     <style>
         body {
-            background-color: #050505;
+            background-color: #120a2e; /* Dark Purple */
             color: #e0e0e0;
             font-family: 'Courier New', Courier, monospace;
             margin: 0;
             padding: 20px;
         }
+
         h1 {
-            color: #7b2cbf;
-            text-shadow: 0 0 10px #7b2cbf;
-            border-bottom: 1px solid #333;
+            color: #bfa1ff;
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #5a3e85;
             padding-bottom: 10px;
         }
-        #status {
-            color: #00ff00;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }
-        .log-container {
+
+        #logs-container {
             width: 100%;
-            height: 80vh;
-            overflow-y: scroll;
-            background: #0a0a10;
-            border: 1px solid #7b2cbf;
-            padding: 10px;
-            box-shadow: 0 0 15px rgba(123, 44, 191, 0.2);
+            max-width: 1200px;
+            margin: 0 auto;
+            border: 1px solid #5a3e85;
+            border-radius: 8px;
+            background-color: #1a103c;
+            overflow-x: auto;
         }
-        .log-entry {
-            border-bottom: 1px solid #333;
-            padding: 5px 0;
-            display: flex;
-            gap: 15px;
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
-        .method { color: #ff9100; font-weight: bold; width: 60px;}
-        .type { color: #00bcd4; width: 100px; font-size: 0.9em;}
-        .url { color: #ffffff; word-break: break-all;}
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #2d1b5e;
+        }
+
+        th {
+            background-color: #2d1b5e;
+            color: #bfa1ff;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background-color: #26174a;
+        }
+
+        .type-HTTP {
+            color: #4caf50; /* Green */
+        }
+
+        .type-HTTPS-INIT {
+            color: #ff9800; /* Orange */
+        }
+
+        .type-HTTPS-DECRYPTED {
+            color: #2196f3; /* Blue */
+        }
+
+        .method {
+            font-weight: bold;
+        }
+
+        .url {
+            word-break: break-all;
+        }
+
+        .empty-message {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+        }
     </style>
 </head>
 <body>
-    <h1>D-TECH // API-FIER PROXY</h1>
-    <div id="status">Connecting to Proxy Node...</div>
-    <div class="log-container" id="logs"></div>
+
+    <h1>D-TECH API-Fier Logs</h1>
+
+    <div id="logs-container">
+        <table id="logs-table">
+            <thead>
+                <tr>
+                    <th style="width: 150px;">Timestamp</th>
+                    <th style="width: 100px;">Type</th>
+                    <th style="width: 80px;">Method</th>
+                    <th>URL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Logs will appear here -->
+            </tbody>
+        </table>
+        <div id="empty-state" class="empty-message">Waiting for traffic...</div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const logContainer = document.getElementById('logs');
-        const statusDiv = document.getElementById('status');
+        const tableBody = document.querySelector('#logs-table tbody');
+        const emptyState = document.getElementById('empty-state');
+
         socket.on('connect', () => {
-            statusDiv.innerText = ">> SYSTEM ONLINE // LISTENING FOR TRAFFIC";
-            statusDiv.style.color = "#00ff00";
+            console.log('Connected to Dashboard Server');
         });
+
         socket.on('log', (data) => {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            div.innerHTML = `<span class="type">[${data.type}]</span><span class="method">${data.method}</span><span class="url">${data.url}</span>`;
-            logContainer.prepend(div);
+            if (emptyState.style.display !== 'none') {
+                emptyState.style.display = 'none';
+            }
+
+            const row = document.createElement('tr');
+
+            // Timestamp
+            const timeCell = document.createElement('td');
+            timeCell.textContent = new Date(data.timestamp).toLocaleTimeString();
+            row.appendChild(timeCell);
+
+            // Type
+            const typeCell = document.createElement('td');
+            typeCell.textContent = data.type;
+            typeCell.className = `type-${data.type}`;
+            row.appendChild(typeCell);
+
+            // Method
+            const methodCell = document.createElement('td');
+            methodCell.textContent = data.method;
+            methodCell.className = 'method';
+            row.appendChild(methodCell);
+
+            // URL
+            const urlCell = document.createElement('td');
+            urlCell.textContent = data.url;
+            urlCell.className = 'url';
+            row.appendChild(urlCell);
+
+            // Prepend to show newest first
+            tableBody.insertBefore(row, tableBody.firstChild);
         });
     </script>
 </body>
