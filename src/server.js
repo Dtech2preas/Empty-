@@ -6,7 +6,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 const { generateFakeCert, CA_CERT_PATH } = require('./certUtils');
 
-const PROXY_PORT = 8080;
+const PROXY_PORT = 8082;
 const DASHBOARD_PORT = 3000;
 
 const app = express();
@@ -19,8 +19,8 @@ io.on('connection', (socket) => {
     console.log(':: Dashboard Connected ::');
 });
 
-server.listen(DASHBOARD_PORT, () => {
-    console.log(`[D-TECH] Dashboard running at http://localhost:${DASHBOARD_PORT}`);
+server.listen(DASHBOARD_PORT, '0.0.0.0', () => {
+    console.log(`[D-TECH] Dashboard running at http://0.0.0.0:${DASHBOARD_PORT}`);
 });
 
 const requestHandler = (req, res) => {
@@ -71,7 +71,7 @@ proxyServer.on('connect', (req, clientSocket, head) => {
     virtualServer.emit('connection', clientSocket);
 });
 
-proxyServer.listen(PROXY_PORT, () => {
+proxyServer.listen(PROXY_PORT, '0.0.0.0', () => {
     console.log(`[D-TECH] Proxy Interceptor running on PORT ${PROXY_PORT}`);
     console.log(`>> Root CA Path: ${CA_CERT_PATH}`);
 });
