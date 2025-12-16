@@ -3,3 +3,7 @@ certs/
 *.pem
 *.key
 .DS_Store
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
