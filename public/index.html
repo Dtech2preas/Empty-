@@ -102,12 +102,15 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        const socket = io({
+            transports: ['polling'],
+            upgrade: false
+        });
         const tableBody = document.querySelector('#logs-table tbody');
         const emptyState = document.getElementById('empty-state');
 
         socket.on('connect', () => {
-            console.log('Connected to Dashboard Server');
+            console.log('Connected via ' + socket.io.engine.transport.name);
         });
 
         socket.on('log', (data) => {

@@ -16,7 +16,10 @@ const INTERNAL_HTTPS_PORT = 8443; // Virtual internal server port
 // --- Dashboard Server ---
 const app = express();
 const dashboardServer = http.createServer(app);
-const io = new Server(dashboardServer);
+const io = new Server(dashboardServer, {
+    transports: ['polling'],
+    allowUpgrades: false
+});
 
 app.use(express.static(path.join(__dirname, '../public')));
 
