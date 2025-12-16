@@ -1,11 +1,16 @@
 package com.dtech.proxybrowser;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.net.http.SslError;
 import android.os.Bundle;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.EditText;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
@@ -16,7 +21,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        EditText urlInput = findViewById(R.id.urlInput);
+        Button goButton = findViewById(R.id.goButton);
         WebView webView = findViewById(R.id.webview);
+
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
 
@@ -29,6 +37,25 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Default load
         webView.loadUrl("https://dash.preasx24.co.za");
+
+        goButton.setOnClickListener(v -> {
+            String url = urlInput.getText().toString().trim();
+            if (url.isEmpty()) return;
+
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://" + url;
+            }
+
+            webView.loadUrl(url);
+
+            // Hide keyboard
+            View view = this.getCurrentFocus();
+            if (view != null) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            }
+        });
     }
 }
