@@ -27,6 +27,11 @@ io.on('connection', (socket) => {
     // Client connected
 });
 
+app.get('/cert', (req, res) => {
+    const certPath = path.join(__dirname, '../certs/rootCA.pem');
+    res.download(certPath, 'D-TECH-Root-CA.pem');
+});
+
 function logTraffic(method, reqUrl, type) {
     const logEntry = {
         method,
