@@ -32,15 +32,33 @@ app.get('/cert', (req, res) => {
     res.download(certPath, 'D-TECH-Root-CA.pem');
 });
 
-function logTraffic(method, reqUrl, type) {
+function logTraffic(method, reqUrl, type, headers = {}, body = '') {
     const logEntry = {
         method,
         url: reqUrl,
         type,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        headers,
+        body
     };
     io.emit('log', logEntry);
     console.log(`[${type}] ${method} ${reqUrl}`);
+}
+
+function logDetailedRequest(method, reqUrl, type, headers, body) {
+    console.log('\n================= INTERCEPTED REQUEST =================');
+    console.log(`Time:    ${new Date().toISOString()}`);
+    console.log(`Type:    ${type}`);
+    console.log(`Method:  ${method}`);
+    console.log(`URL:     ${reqUrl}`);
+    console.log('--------------------- HEADERS -------------------------');
+    console.log(JSON.stringify(headers, null, 2));
+    if (body && body.length > 0) {
+        console.log('---------------------- BODY ---------------------------');
+        // If body is very long, maybe truncate for console, but for now capture all as requested
+        console.log(body);
+    }
+    console.log('=======================================================\n');
 }
 
 dashboardServer.listen(DASHBOARD_PORT, '0.0.0.0', () => {
@@ -100,7 +118,24 @@ const internalHttpsServer = https.createServer({
         };
     }
 
-    logTraffic(req.method, urlForLogging, 'HTTPS-DECRYPTED');
+    // Capture Body
+    let reqBodyChunks = [];
+    req.on('data', (chunk) => {
+        reqBodyChunks.push(chunk);
+    });
+
+    req.on('end', () => {
+        const bodyBuffer = Buffer.concat(reqBodyChunks);
+        let bodyStr = bodyBuffer.toString('utf8');
+
+        // Simple check if it looks like binary garbage (optional)
+        // If content-encoding is gzip/br, the body we see here is the raw encrypted stream?
+        // No, internalHttpsServer receives DECRYPTED traffic from the client.
+        // But the client might send gzip compressed body (rare for requests).
+
+        logTraffic(req.method, urlForLogging, 'HTTPS-DECRYPTED', req.headers, bodyStr);
+        logDetailedRequest(req.method, urlForLogging, 'HTTPS-DECRYPTED', req.headers, bodyStr);
+    });
 
     // Make the request using the safe options object
     const proxyReq = https.request(requestOptions, (proxyRes) => {
@@ -128,7 +163,18 @@ internalHttpsServer.listen(INTERNAL_HTTPS_PORT, '127.0.0.1', () => {
 // --- Main Proxy Server ---
 const proxyServer = http.createServer((req, res) => {
     // Handle standard HTTP requests
-    logTraffic(req.method, req.url, 'HTTP');
+
+    // Capture Body
+    let reqBodyChunks = [];
+    req.on('data', (chunk) => {
+        reqBodyChunks.push(chunk);
+    });
+
+    req.on('end', () => {
+        const bodyStr = Buffer.concat(reqBodyChunks).toString('utf8');
+        logTraffic(req.method, req.url, 'HTTP', req.headers, bodyStr);
+        logDetailedRequest(req.method, req.url, 'HTTP', req.headers, bodyStr);
+    });
 
     const parsedUrl = url.parse(req.url);
     const options = {
