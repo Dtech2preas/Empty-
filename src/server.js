@@ -71,6 +71,7 @@ dashboardServer.listen(DASHBOARD_PORT, '0.0.0.0', () => {
 
 const internalHttpsServer = https.createServer({
     SNICallback: (domain, cb) => {
+        console.log(`[DEBUG] SNICallback called for domain: ${domain}`);
         try {
             const { key, cert } = generateFakeCert(domain);
             const ctx = tls.createSecureContext({ key, cert });
@@ -155,6 +156,18 @@ const internalHttpsServer = https.createServer({
     req.pipe(proxyReq);
 });
 
+internalHttpsServer.on('tlsClientError', (err, tlsSocket) => {
+    console.error('[DEBUG] TLS Client Error on Internal Server:', err.message, err.code);
+});
+
+internalHttpsServer.on('secureConnection', (tlsSocket) => {
+    console.log('[DEBUG] Secure connection established with client.');
+});
+
+internalHttpsServer.on('error', (err) => {
+    console.error('[DEBUG] Internal HTTPS Server Error:', err);
+});
+
 internalHttpsServer.listen(INTERNAL_HTTPS_PORT, '127.0.0.1', () => {
     console.log(`Internal MITM HTTPS Server running on 127.0.0.1:${INTERNAL_HTTPS_PORT}`);
 });
@@ -211,12 +224,13 @@ proxyServer.on('connect', (req, clientSocket, head) => {
 
     // Connect to our internal MITM server
     // We treat the internal server as the destination for the tunnel
+    console.log(`[DEBUG] Tunneling to internal server for ${req.url}. Head size: ${head.length}`);
     const proxySocket = net.connect(INTERNAL_HTTPS_PORT, '127.0.0.1', () => {
         clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
 
         // Pipe the client's SSL handshake to our internal server
         // The internal server will see the SNI and generate the cert
-        proxySocket.write(head);
+        if (head.length > 0) proxySocket.write(head);
         clientSocket.pipe(proxySocket).pipe(clientSocket);
     });
 
