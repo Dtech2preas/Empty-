@@ -118,7 +118,10 @@ const internalHttpsServer = https.createServer({
         };
     }
 
-    // Capture Body
+    // 1. Log immediately so we see the traffic start
+    logTraffic(req.method, urlForLogging, 'HTTPS-DECRYPTED', req.headers, '[Waiting for body...]');
+
+    // 2. Capture Body for detailed inspection
     let reqBodyChunks = [];
     req.on('data', (chunk) => {
         reqBodyChunks.push(chunk);
@@ -128,12 +131,9 @@ const internalHttpsServer = https.createServer({
         const bodyBuffer = Buffer.concat(reqBodyChunks);
         let bodyStr = bodyBuffer.toString('utf8');
 
-        // Simple check if it looks like binary garbage (optional)
-        // If content-encoding is gzip/br, the body we see here is the raw encrypted stream?
-        // No, internalHttpsServer receives DECRYPTED traffic from the client.
-        // But the client might send gzip compressed body (rare for requests).
-
-        logTraffic(req.method, urlForLogging, 'HTTPS-DECRYPTED', req.headers, bodyStr);
+        // Log the detailed view to Console (for script generation)
+        // We don't emit to socket again to avoid double-entry in dashboard,
+        // unless you want updates. For now, we ensure console gets the good stuff.
         logDetailedRequest(req.method, urlForLogging, 'HTTPS-DECRYPTED', req.headers, bodyStr);
     });
 
@@ -164,7 +164,10 @@ internalHttpsServer.listen(INTERNAL_HTTPS_PORT, '127.0.0.1', () => {
 const proxyServer = http.createServer((req, res) => {
     // Handle standard HTTP requests
 
-    // Capture Body
+    // 1. Log immediately
+    logTraffic(req.method, req.url, 'HTTP', req.headers, '[Waiting for body...]');
+
+    // 2. Capture Body
     let reqBodyChunks = [];
     req.on('data', (chunk) => {
         reqBodyChunks.push(chunk);
@@ -172,7 +175,6 @@ const proxyServer = http.createServer((req, res) => {
 
     req.on('end', () => {
         const bodyStr = Buffer.concat(reqBodyChunks).toString('utf8');
-        logTraffic(req.method, req.url, 'HTTP', req.headers, bodyStr);
         logDetailedRequest(req.method, req.url, 'HTTP', req.headers, bodyStr);
     });
 
