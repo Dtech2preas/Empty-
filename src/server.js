@@ -63,7 +63,13 @@ const internalHttpsServer = https.createServer({
         }
     }
 }, (req, res) => {
-    const targetUrl = new URL(req.url, `https://${req.headers.host}`);
+    let targetUrl;
+    try {
+        targetUrl = new URL(req.url, `https://${req.headers.host}`);
+    } catch (err) {
+        console.warn('Invalid URL encountered, falling back to raw:', req.url);
+        targetUrl = req.url;
+    }
 
     logTraffic(req.method, targetUrl.toString(), 'HTTPS-DECRYPTED');
 
