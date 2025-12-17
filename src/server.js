@@ -63,29 +63,58 @@ const internalHttpsServer = https.createServer({
         }
     }
 }, (req, res) => {
-    let targetUrl;
+    let requestOptions = {};
+    let urlForLogging = "";
+
     try {
-        targetUrl = new URL(req.url, `https://${req.headers.host}`);
+        // Method 1: Try to build a standard URL object
+        const targetUrlObj = new URL(req.url, `https://${req.headers.host}`);
+        urlForLogging = targetUrlObj.toString();
+        
+        // If successful, use the URL object and merge options
+        requestOptions = {
+            hostname: targetUrlObj.hostname,
+            port: targetUrlObj.port || 443,
+            path: targetUrlObj.pathname + targetUrlObj.search,
+            method: req.method,
+            headers: req.headers,
+            rejectUnauthorized: false
+        };
+
     } catch (err) {
-        console.warn('Invalid URL encountered, falling back to raw:', req.url);
-        targetUrl = req.url;
+        // Method 2: Fallback for weird URLs (like //v1:checkClientOptions)
+        // We manually construct options to prevent https.request from crashing
+        console.warn('Invalid URL encountered, using Manual Mode:', req.url);
+        urlForLogging = req.url;
+
+        const hostHeader = req.headers.host || "";
+        const [hostname, port] = hostHeader.split(':');
+
+        requestOptions = {
+            hostname: hostname,
+            port: port || 443,
+            path: req.url, // Send the raw weird path exactly as received
+            method: req.method,
+            headers: req.headers,
+            rejectUnauthorized: false
+        };
     }
 
-    logTraffic(req.method, targetUrl.toString(), 'HTTPS-DECRYPTED');
+    logTraffic(req.method, urlForLogging, 'HTTPS-DECRYPTED');
 
-    const proxyReq = https.request(targetUrl, {
-        method: req.method,
-        headers: req.headers,
-        rejectUnauthorized: false // We trust the upstream for now (or could be strict)
-    }, (proxyRes) => {
+    // Make the request using the safe options object
+    const proxyReq = https.request(requestOptions, (proxyRes) => {
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         proxyRes.pipe(res);
     });
 
     proxyReq.on('error', (err) => {
         console.error('HTTPS Forwarding Error:', err);
-        res.statusCode = 502;
-        res.end('Bad Gateway');
+        // Don't crash, just end the response
+        if (!res.headersSent) {
+            res.statusCode = 502;
+            res.end('Bad Gateway');
+        }
     });
 
     req.pipe(proxyReq);
@@ -117,8 +146,10 @@ const proxyServer = http.createServer((req, res) => {
 
     proxyReq.on('error', (err) => {
         console.error('HTTP Proxy Error:', err);
-        res.statusCode = 502;
-        res.end('Bad Gateway');
+        if (!res.headersSent) {
+            res.statusCode = 502;
+            res.end('Bad Gateway');
+        }
     });
 
     req.pipe(proxyReq);
