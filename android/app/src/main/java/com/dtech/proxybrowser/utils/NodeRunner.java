@@ -38,14 +38,11 @@ public class NodeRunner {
         new Thread(() -> {
             try {
                 String appDataDir = context.getFilesDir().getAbsolutePath();
-                String nodeDir = appDataDir + "/bin";
                 String nodeJsProjectDir = appDataDir + "/nodejs-project";
 
-                String arch = getArch();
-                String nodeBinaryPath = nodeDir + "/" + arch + "/node";
-
-                // Ensure binary is executable
-                new File(nodeBinaryPath).setExecutable(true);
+                // The node binary is extracted by Android package manager to the native library directory
+                String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+                String nodeBinaryPath = nativeLibDir + "/libnode.so";
 
                 emitLog("Starting Node.js: " + nodeBinaryPath + " " + scriptPath);
 
@@ -83,15 +80,5 @@ public class NodeRunner {
             nodeProcess.destroy();
             nodeProcess = null;
         }
-    }
-
-    private String getArch() {
-        String arch = Build.SUPPORTED_ABIS[0];
-        if (arch.contains("arm64") || arch.contains("aarch64")) {
-            return "arm64-v8a";
-        } else if (arch.contains("armeabi")) {
-            return "armeabi-v7a";
-        }
-        return "arm64-v8a"; // Default to arm64
     }
 }
