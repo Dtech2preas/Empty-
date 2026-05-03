@@ -7,3 +7,12 @@ android/.gradle/
 android/local.properties
 android/app/build/
 android/build/
+android/app/node_assets/nodejs-project/src/
+android/app/src/main/assets/env.zip
+android/app/node_assets/nodejs-project/package.json
+
+android/app/node_assets/nodejs-project/src/
+android/app/src/main/assets/env.zip
+android/app/node_assets/nodejs-project/package.json
+android/app/node_assets/nodejs-project/package-lock.json
+android/app/node_assets/nodejs-project/node_modules/
