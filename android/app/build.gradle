@@ -26,6 +26,13 @@ android {
     }
 }
 
+task npmInstall(type: Exec) {
+    workingDir 'src/main/assets/nodejs-project'
+    commandLine 'npm', 'install', '--production'
+}
+
+preBuild.dependsOn npmInstall
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.10.0'
