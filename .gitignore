@@ -7,3 +7,9 @@ android/.gradle/
 android/local.properties
 android/app/build/
 android/build/
+nodejs-mobile/
+data/
+*.deb
+control.tar.xz
+data.tar.xz
+debian-binary
