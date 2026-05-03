@@ -31,7 +31,18 @@ android {
     }
 }
 
+task copyNodeProject(type: Copy) {
+    into 'node_assets/nodejs-project'
+
+    into('src') {
+        from '../../src'
+    }
+
+    from '../../package.json'
+}
+
 task npmInstall(type: Exec) {
+    dependsOn copyNodeProject
     workingDir 'node_assets/nodejs-project'
     commandLine 'npm', 'install', '--production'
 }
