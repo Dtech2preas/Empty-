@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.content.ClipData;
+import android.app.AlertDialog;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -25,6 +26,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -53,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private NodeRunner nodeRunner;
     private TextView statusText, ipText;
     private WebView webView;
+    private StringBuilder logBuffer = new StringBuilder();
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -79,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
         Button goButton = findViewById(R.id.goButton);
         Button downloadCertButton = findViewById(R.id.downloadCertButton);
         Button openDashButton = findViewById(R.id.openDashButton);
+        Button viewLogsButton = findViewById(R.id.viewLogsButton);
         webView = findViewById(R.id.webview);
 
         webView.getSettings().setJavaScriptEnabled(true);
@@ -112,6 +116,8 @@ public class MainActivity extends AppCompatActivity {
             webView.loadUrl("http://127.0.0.1:3000");
         });
 
+        viewLogsButton.setOnClickListener(v -> showLogsDialog());
+
         downloadCertButton.setOnClickListener(v -> {
             if (checkStoragePermission()) {
                 downloadCertificate();
@@ -124,16 +130,51 @@ public class MainActivity extends AppCompatActivity {
         initNodeJs();
     }
 
+    private void addLog(String message) {
+        logBuffer.append(message).append("\n");
+    }
+
+    private void showLogsDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Server Logs");
+
+        ScrollView scrollView = new ScrollView(this);
+        TextView textView = new TextView(this);
+        textView.setText(logBuffer.toString());
+        textView.setPadding(32, 32, 32, 32);
+        scrollView.addView(textView);
+
+        builder.setView(scrollView);
+
+        builder.setPositiveButton("Close", (dialog, which) -> dialog.dismiss());
+        builder.setNeutralButton("Copy", (dialog, which) -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = ClipData.newPlainText("Server Logs", logBuffer.toString());
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(this, "Logs copied", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        builder.show();
+    }
+
     private void initNodeJs() {
         new Thread(() -> {
             try {
-                // 1. Copy assets
                 String appDataDir = getFilesDir().getAbsolutePath();
-                AssetUtils.copyAssetFolder(this, "bin", appDataDir + "/bin");
-                AssetUtils.copyAssetFolder(this, "nodejs-project", appDataDir + "/nodejs-project");
+
+                // 1. Extract the zip
+                runOnUiThread(() -> statusText.setText("Proxy Status: Extracting environment..."));
+                AssetUtils.extractZipAsset(this, "env.zip", appDataDir, message -> {
+                    addLog(message);
+                    runOnUiThread(() -> statusText.setText("Proxy Status: " + message));
+                });
 
                 // 2. Start Node.js
+                runOnUiThread(() -> statusText.setText("Proxy Status: Starting Server..."));
                 nodeRunner = new NodeRunner(this);
+                nodeRunner.setLogListener(this::addLog);
                 nodeRunner.startNode("src/server.js");
 
                 runOnUiThread(() -> {
@@ -149,6 +190,7 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (IOException e) {
                 Log.e(TAG, "Failed to initialize Node.js", e);
+                addLog("Error initializing: " + e.getMessage());
                 runOnUiThread(() -> statusText.setText("Proxy Status: Error"));
             }
         }).start();
