@@ -10,8 +10,13 @@ import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -31,9 +36,15 @@ import androidx.core.content.ContextCompat;
 import com.dtech.proxybrowser.utils.AssetUtils;
 import com.dtech.proxybrowser.utils.NodeRunner;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.URL;
 import java.util.Collections;
 import java.util.List;
 
@@ -51,6 +62,19 @@ public class MainActivity extends AppCompatActivity {
 
         statusText = findViewById(R.id.statusText);
         ipText = findViewById(R.id.ipText);
+
+        ipText.setOnClickListener(v -> {
+            String text = ipText.getText().toString();
+            if (!text.isEmpty() && !text.equals("IP: --")) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("Proxy Info", text);
+                if (clipboard != null) {
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(this, "Copied proxy info", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
         EditText urlInput = findViewById(R.id.urlInput);
         Button goButton = findViewById(R.id.goButton);
         Button downloadCertButton = findViewById(R.id.downloadCertButton);
@@ -154,18 +178,58 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void downloadCertificate() {
-        String url = "http://127.0.0.1:3000/cert";
-        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-        request.setTitle("D-TECH-Root-CA.pem");
-        request.setDescription("Downloading CA Certificate");
-        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "D-TECH-Root-CA.pem");
+        Toast.makeText(this, "Downloading Certificate...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://127.0.0.1:3000/cert");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.connect();
 
-        DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-        if (manager != null) {
-            manager.enqueue(request);
-            Toast.makeText(this, "Downloading Certificate...", Toast.LENGTH_SHORT).show();
-        }
+                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                    runOnUiThread(() -> Toast.makeText(this, "Failed to download certificate: Server Error", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                InputStream inputStream = connection.getInputStream();
+                OutputStream outputStream;
+                String fileName = "D-TECH-Root-CA.pem";
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentResolver resolver = getContentResolver();
+                    ContentValues contentValues = new ContentValues();
+                    contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+                    contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "application/x-x509-ca-cert");
+                    contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+
+                    Uri fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues);
+                    if (fileUri == null) {
+                        runOnUiThread(() -> Toast.makeText(this, "Failed to create file", Toast.LENGTH_SHORT).show());
+                        return;
+                    }
+                    outputStream = resolver.openOutputStream(fileUri);
+                } else {
+                    File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File file = new File(downloadsDir, fileName);
+                    outputStream = new FileOutputStream(file);
+                }
+
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                outputStream.close();
+                inputStream.close();
+
+                runOnUiThread(() -> Toast.makeText(this, "Certificate downloaded to Downloads", Toast.LENGTH_LONG).show());
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error downloading cert", e);
+                runOnUiThread(() -> Toast.makeText(this, "Error downloading certificate", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 
     private String getIPAddress(boolean useIPv4) {
